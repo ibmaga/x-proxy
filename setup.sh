@@ -4,8 +4,8 @@
 #  
 #
 #  Usage:
-#    bash haproxy-sni-install.sh --sni "layerzro.ru:10443,eh.vk.com:10444"
-#    bash haproxy-sni-install.sh --sni "layerzro.ru:10443,eh.vk.com:10444" --default 10443 --stats
+#    bash haproxy-sni-install.sh --sni "reg.ru:10443,google..com:10444"
+#    bash haproxy-sni-install.sh --sni "reg.ru:10443,google..com:10444" --default 10443 --stats
 #
 #  Формат SNI записей (через запятую):
 #    <sni_domain>:<backend_addr>[:<options>]
@@ -87,7 +87,7 @@ show_usage() {
     echo "  -h, --help                Show this help"
     echo ""
     echo "Examples:"
-    echo "  $0 --sni 'layerzro.ru:10443,eh.vk.com:10444' --default 10443 --stats"
+    echo "  $0 --sni 'reg.ru:10443,google.com:10444' --default 10443 --stats"
     echo "  $0 --sni 'my.domain.com:10443:proxy2,other.com:10444:noproxy'"
     echo ""
 }
