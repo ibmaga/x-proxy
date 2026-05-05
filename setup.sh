@@ -1,11 +1,11 @@
 #!/usr/bin/env bash
 # =============================================================================
-# 
-#  
+#  HAProxy SNI Router — TCP passthrough для нескольких Xray inbound на 443
+#  Разводит трафик по SNI → разные бэкенды (локальные порты / unix sockets)
 #
 #  Usage:
-#    bash haproxy-sni-install.sh --sni "reg.ru:10443,google..com:10444"
-#    bash haproxy-sni-install.sh --sni "reg.ru:10443,google..com:10444" --default 10443 --stats
+#    bash haproxy-sni-install.sh --sni "layerzro.ru:10443,eh.vk.com:10444"
+#    bash haproxy-sni-install.sh --sni "layerzro.ru:10443,eh.vk.com:10444" --default 10443 --stats
 #
 #  Формат SNI записей (через запятую):
 #    <sni_domain>:<backend_addr>[:<options>]
@@ -18,9 +18,9 @@
 #  options (через +):
 #    - noproxy  → НЕ отправлять PROXY protocol (по умолчанию send-proxy включён)
 #    - proxy2   → send-proxy-v2 вместо v1
-#    - check    → enable health check
+#    - nocheck  → НЕ проверять доступность бэкенда (по умолчанию health check включён)
 #
-#  По умолчанию ВСЕ бэкенды получают send-proxy (PROXY protocol v1).
+#  По умолчанию ВСЕ бэкенды получают send-proxy + health check (inter 2s, fall 2, rise 2).
 #  Xray inbound должен иметь acceptProxyProtocol: true в rawSettings/tcpSettings.
 #
 #  Flags:
@@ -67,10 +67,11 @@ show_usage() {
     echo ""
     echo "SNI entry format: <domain>:<backend>[:<options>]"
     echo "  backend: port | ip:port | /path/to/socket"
-    echo "  options: noproxy, proxy2, check (combine with +)"
+    echo "  options: noproxy, proxy2, nocheck (combine with +)"
     echo ""
-    echo "  По умолчанию все бэкенды получают send-proxy (PROXY protocol v1)."
-    echo "  Используй :noproxy чтобы отключить для конкретного бэкенда."
+    echo "  По умолчанию все бэкенды получают send-proxy + health check."
+    echo "  Используй :noproxy чтобы отключить proxy protocol."
+    echo "  Используй :nocheck чтобы отключить health check."
     echo "  Используй :proxy2 для PROXY protocol v2."
     echo ""
     echo "Options:"
@@ -87,8 +88,8 @@ show_usage() {
     echo "  -h, --help                Show this help"
     echo ""
     echo "Examples:"
-    echo "  $0 --sni 'reg.ru:10443,google.com:10444' --default 10443 --stats"
-    echo "  $0 --sni 'my.domain.com:10443:proxy2,other.com:10444:noproxy'"
+    echo "  $0 --sni 'layerzro.ru:10443,eh.vk.com:10444' --default 10443 --stats"
+    echo "  $0 --sni 'my.domain.com:10443:proxy2,other.com:10444:nocheck'"
     echo ""
 }
 
@@ -270,7 +271,7 @@ generate_server_line() {
 
     local has_noproxy=false
     local has_proxy2=false
-    local has_check=false
+    local has_nocheck=false
 
     if [[ -n "$opts" ]]; then
         IFS='+' read -ra OPT_ARRAY <<< "$opts"
@@ -278,7 +279,7 @@ generate_server_line() {
             case "$opt" in
                 noproxy) has_noproxy=true ;;
                 proxy2)  has_proxy2=true ;;
-                check)   has_check=true ;;
+                nocheck) has_nocheck=true ;;
             esac
         done
     fi
@@ -291,7 +292,9 @@ generate_server_line() {
         fi
     fi
 
-    [[ "$has_check" == "true" ]] && line+=" check"
+    if [[ "$has_nocheck" == "false" ]]; then
+        line+=" check inter 2000 fall 2 rise 2"
+    fi
 
     echo "$line"
 }
@@ -387,7 +390,7 @@ if [[ -n "$DEFAULT_BACKEND" ]]; then
     echo ""
     echo "backend bk_default"
     echo "    mode tcp"
-    echo "    server srv_default ${DEFAULT_BACKEND} send-proxy"
+    echo "    server srv_default ${DEFAULT_BACKEND} send-proxy check inter 2000 fall 2 rise 2"
 fi
 
 } > "${HAPROXY_CFG}"
